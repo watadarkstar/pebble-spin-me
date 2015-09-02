@@ -1,0 +1,23 @@
+{
+    "appKeys": {},
+    "capabilities": [
+        ""
+    ],
+    "companyName": "Adrian Carolli",
+    "longName": "SpinMe Alarm Clock",
+    "projectType": "native",
+    "resources": {
+        "media": []
+    },
+    "sdkVersion": "3",
+    "shortName": "SpinMe Alarm",
+    "targetPlatforms": [
+        "aplite",
+        "basalt"
+    ],
+    "uuid": "555f4788-0b0c-4f74-b7d0-a6987f45e675",
+    "versionLabel": "1.0",
+    "watchapp": {
+        "watchface": false
+    }
+}
