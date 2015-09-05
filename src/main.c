@@ -1,141 +1,180 @@
 #include <pebble.h>
 
-#define ANTIALIASING true
 #define TESTING false
+
+// Spin constants
+static const int16_t RADIUS = 58;
+static const int16_t BORDER = 8;
+static const int16_t MAX_SPINS = 2;
   
+// Spin window
 static Window *s_spin_window;
-static TextLayer *s_time_layer, *s_top_text_layer, *s_spins_text_layer, *s_bottom_text_layer;
-static TextLayer *s_heading_text_layer;
-static TextLayer *s_status_layer;
-static Layer *s_circle_canvas_layer;
-static Layer *s_triangle_canvas_layer;
-static GPoint s_center, s_circle_center;
-static GPath *s_triangle_path;
-static GPath *s_arrow_path;
+
+// Spin Layers
+static TextLayer *s_spin_time_layer, *s_spin_heading_text_layer, *s_spin_top_text_layer, *s_spin_spins_text_layer, *s_spin_bottom_text_layer;
+static Layer *s_spin_circle_canvas_layer;
+static Layer *s_spin_triangle_canvas_layer;
+
+// Spin welcome Layers
+static TextLayer *s_welcome_text_layer;
+static Layer *s_welcome_canvas_layer;
+
+// Spin paths and points
+static GPoint s_center, s_spin_circle_center;
+static GPath *s_spin_triangle_path;
+static GPath *s_spin_arrow_path;
 
 static const GPathInfo BOLT_PATH_INFO = {
   .num_points = 3,
   .points = (GPoint []) {{0, 0}, {0, -80}, {40, -80}}
 };
 
-static const GPathInfo ARROW_PATH_INFO = {
+static const GPathInfo SPIN_ARROW_PATH_INFO = {
   .num_points = 3,
   .points = (GPoint []) {{0, 0}, {0, -20}, {20, -10}}
 };
 
-static const int16_t RADIUS = 58;
-static const int16_t BORDER = 8;
+// Spin welcome paths
+static GPath *s_welcome_arrow_path;
+static GRect s_welcome_rect;
+static const GPathInfo WELCOME_ARROW_PATH_INFO = {
+  .num_points = 3,
+  .points = (GPoint []) {{0, 0}, {0, -20}, {20, -10}}
+};
 
-static int16_t angle = -1;
-static int16_t prev_compass_heading = 0;
-
-static bool spinning = false;
-static const int16_t MAX_SPINS = 2;
+// Spin state stuff
+static int32_t angle = -1;
+static int32_t prev_compass_heading = 0;
+static bool s_spinning = false;
 static int16_t spins = 0;
 
-int16_t math_abs(int n){
+int32_t math_abs(int32_t n){
   return n < 0 ? -n : n;
 }
 
-void set_angle(int16_t compass_heading){
-  // Allocate a static output buffer
-  static char s_buffer[32];
-  static int16_t diff, deg;
-  
-  diff = math_abs(TRIGANGLE_TO_DEG(prev_compass_heading - compass_heading));
-  
-  APP_LOG(APP_LOG_LEVEL_DEBUG, "prev compass heading: %d", prev_compass_heading);
-  APP_LOG(APP_LOG_LEVEL_DEBUG, "compass heading: %d", compass_heading);
-  APP_LOG(APP_LOG_LEVEL_DEBUG, "diff: %d", diff);
-  
-  if (prev_compass_heading > compass_heading && diff > 8) {
-    angle += 360 * 4 * TRIG_MAX_RATIO;
-    APP_LOG(APP_LOG_LEVEL_DEBUG, "clockwise");
-  } else if(diff > 8) {
-    angle -= 360 * 4 * TRIG_MAX_RATIO;
-    APP_LOG(APP_LOG_LEVEL_DEBUG, "counterclockwise");
-  }
-  prev_compass_heading = compass_heading;
-  
-  if (TESTING) {
-    snprintf(s_buffer, sizeof(s_buffer), "Compass calibrated\nHeading: %d", TRIGANGLE_TO_DEG(compass_heading));
-    text_layer_set_text(s_status_layer, s_buffer);
-  }
-  
-  // figure this shit out
-  deg = TRIGANGLE_TO_DEG(angle);
-  APP_LOG(APP_LOG_LEVEL_DEBUG, "deg: %d", deg);
-  if(spins == 2 && deg > 0) {
-    spins = 1;
-  } else if(spins == 1 && deg <= 0) {
-    spins = 2; // DONE
-  } 
-  
-  // Set spin text
-  snprintf(s_buffer, sizeof(s_buffer), "%d", MAX_SPINS - spins);
-  text_layer_set_text(s_spins_text_layer, s_buffer);
-  
-  layer_mark_dirty(s_triangle_canvas_layer);
+static void spin_set_hidden(bool hidden){
+  layer_set_hidden((Layer *)s_spin_heading_text_layer, hidden);
+  layer_set_hidden((Layer *)s_spin_top_text_layer, hidden);
+  layer_set_hidden((Layer *)s_spin_spins_text_layer, hidden);
+  layer_set_hidden((Layer *)s_spin_bottom_text_layer, hidden);
 }
 
-// Compass callback
-void compass_handler(CompassHeadingData data) {
+static void set_spinning(bool spinning){
+  s_spinning = spinning;
+  spin_set_hidden(!s_spinning);
   if(!spinning) {
+    layer_mark_dirty(s_spin_triangle_canvas_layer);
+    layer_mark_dirty(s_spin_circle_canvas_layer);
+  }
+}
+
+static void set_alarm_on(bool on){
+  if(!on){
+    // off state
+    set_spinning(false);
+    window_stack_remove(s_spin_window, true);
+    return;
+  } 
+  // on state
+  spins = 0;
+  set_spinning(false);
+}
+
+void set_spin_angle(int32_t compass_heading){
+  if(!s_spinning) {
     return;
   }
   
   // Allocate a static output buffer
   static char s_buffer[32];
+  static int32_t diff, deg;
   
+  diff = math_abs(TRIGANGLE_TO_DEG(prev_compass_heading - compass_heading));
+  
+  if (TESTING){
+    APP_LOG(APP_LOG_LEVEL_DEBUG, "prev compass heading: %d", (int)prev_compass_heading);
+    APP_LOG(APP_LOG_LEVEL_DEBUG, "compass heading: %d", (int)compass_heading);
+    APP_LOG(APP_LOG_LEVEL_DEBUG, "diff: %d", (int)diff);
+  }
+    
+  if (prev_compass_heading > compass_heading && diff > 5) {
+    angle -= 10 * TRIG_MAX_ANGLE / 360;
+    if(TESTING) APP_LOG(APP_LOG_LEVEL_DEBUG, "clockwise");
+  } else if(diff > 5) {
+    angle += 10 * TRIG_MAX_ANGLE / 360;
+    if(TESTING) APP_LOG(APP_LOG_LEVEL_DEBUG, "counterclockwise");
+  }
+  prev_compass_heading = compass_heading;
+  
+  // Set the number of spins completed
+  deg = TRIGANGLE_TO_DEG(angle);
+  spins = (int16_t)((math_abs(deg) + 20) / 180);
+  
+  // Turn off alarm
+  if (spins == MAX_SPINS) {
+    set_alarm_on(false);
+  }
+  
+  APP_LOG(APP_LOG_LEVEL_DEBUG, "deg: %d", (int)deg);
+  APP_LOG(APP_LOG_LEVEL_DEBUG, "spins: %d", (int)deg);
+  
+  // Set spin text
+  snprintf(s_buffer, sizeof(s_buffer), "%d", MAX_SPINS - spins);
+  text_layer_set_text(s_spin_spins_text_layer, s_buffer);
+  
+  layer_mark_dirty(s_spin_triangle_canvas_layer);
+}
+
+// Compass callback
+void compass_handler(CompassHeadingData data) {
   // Determine status of the compass
   switch (data.compass_status) {
     // Compass data is not yet valid
     case CompassStatusDataInvalid:
-      text_layer_set_text(s_status_layer, "Compass data invalid");
+      APP_LOG(APP_LOG_LEVEL_ERROR, "Compass data invalid, got: %d", (int)TRIGANGLE_TO_DEG(data.true_heading));
       break;
 
     // Compass is currently calibrating, but a heading is available
     case CompassStatusCalibrating:
-      set_angle((int16_t)data.true_heading);
+      set_spin_angle((int32_t)data.true_heading);
       break;
     // Compass data is ready for use, write the heading in to the buffer
     case CompassStatusCalibrated:
-      set_angle((int16_t)data.true_heading);
+      set_spin_angle((int32_t)data.true_heading);
       break;
 
     // CompassStatus is unknown
     default:
-      snprintf(s_buffer, sizeof(s_buffer), "Unknown CompassStatus: %d", data.compass_status);
-      text_layer_set_text(s_status_layer, s_buffer);
+      APP_LOG(APP_LOG_LEVEL_ERROR, "Unknown CompassStatus: %d", data.compass_status);
       break;
   }
 }
 
 static void update_triangle_proc(Layer *layer, GContext *ctx) {
-  if(!spinning) {
+  if(!s_spinning) {
     return;
   }
   
   // Move
-  int16_t move_x = (int16_t)(sin_lookup(angle) * (RADIUS - 4) / TRIG_MAX_RATIO);
-  int16_t move_y = (int16_t)(-cos_lookup(angle) * (RADIUS - 4) / TRIG_MAX_RATIO);
-  gpath_move_to(s_arrow_path, GPoint(s_circle_center.x - move_x, s_circle_center.y + move_y));
+  int32_t move_x = (int32_t)(sin_lookup(angle) * (RADIUS - 4) / TRIG_MAX_RATIO);
+  int32_t move_y = (int32_t)(-cos_lookup(angle) * (RADIUS - 4) / TRIG_MAX_RATIO);
+  gpath_move_to(s_spin_arrow_path, GPoint(s_spin_circle_center.x - move_x, s_spin_circle_center.y + move_y));
   
   if(TESTING){
-    APP_LOG(APP_LOG_LEVEL_DEBUG, "move_x: %d", move_x);
-    APP_LOG(APP_LOG_LEVEL_DEBUG, "move_y: %d", move_y);
-    APP_LOG(APP_LOG_LEVEL_DEBUG, "angle: %d", TRIGANGLE_TO_DEG(angle));
+    APP_LOG(APP_LOG_LEVEL_DEBUG, "move_x: %d", (int)move_x);
+    APP_LOG(APP_LOG_LEVEL_DEBUG, "move_y: %d", (int)move_y);
+    APP_LOG(APP_LOG_LEVEL_DEBUG, "angle: %d", (int)TRIGANGLE_TO_DEG(angle));
   }
   
   // Rotate
-  gpath_rotate_to(s_triangle_path, -angle);
-  gpath_rotate_to(s_arrow_path, -angle);
+  gpath_rotate_to(s_spin_triangle_path, -angle);
+  gpath_rotate_to(s_spin_arrow_path, -angle);
   
-   // Fill the path:
+  // Fill the path:
   graphics_context_set_fill_color(ctx, GColorBlack);
-  gpath_draw_filled(ctx, s_triangle_path);
+  gpath_draw_filled(ctx, s_spin_triangle_path);
   graphics_context_set_fill_color(ctx, GColorWhite);
-  gpath_draw_filled(ctx, s_arrow_path);
+  gpath_draw_filled(ctx, s_spin_arrow_path);
   
   if(TESTING){
     // Stroke the path:
@@ -144,12 +183,25 @@ static void update_triangle_proc(Layer *layer, GContext *ctx) {
   }
 }
 
-static void update_circle_proc(Layer *layer, GContext *ctx) {
+static void update_welcome_proc(Layer *layer, GContext *ctx){
+  // Fill the path:
+  graphics_context_set_fill_color(ctx, GColorBlack);
+  gpath_draw_filled(ctx, s_welcome_arrow_path);
+  graphics_context_set_fill_color(ctx, GColorWhite);
+  gpath_draw_filled(ctx, s_welcome_arrow_path);
+  graphics_fill_rect(ctx, s_welcome_rect, 0, GCornerNone );
+
+}
+
+static void update_spin_circle_proc(Layer *layer, GContext *ctx) {
+  if(!s_spinning){
+    return;
+  }
   graphics_context_set_stroke_color(ctx, GColorWhite);
   graphics_context_set_fill_color(ctx, GColorWhite);
-  graphics_fill_circle(ctx, s_circle_center, RADIUS + BORDER);
+  graphics_fill_circle(ctx, s_spin_circle_center, RADIUS + BORDER);
   graphics_context_set_fill_color(ctx, GColorBlack);
-  graphics_fill_circle(ctx, s_circle_center, RADIUS);
+  graphics_fill_circle(ctx, s_spin_circle_center, RADIUS);
 }
 
 static void update_time() {
@@ -175,7 +227,7 @@ static void update_time() {
   }
 
   // Display this time on the TextLayer
-  text_layer_set_text(s_time_layer, buffer);
+  text_layer_set_text(s_spin_time_layer, buffer);
 }
 
 static void main_window_load(Window *window) {
@@ -183,80 +235,92 @@ static void main_window_load(Window *window) {
   Layer *window_layer = window_get_root_layer(window);
   GRect window_bounds = layer_get_bounds(window_layer);
   
-  // Circle Layer
+  // Points
   s_center = grect_center_point(&window_bounds);
-  s_circle_center = GPoint(s_center.x, s_center.y + 10);
-  s_circle_canvas_layer = layer_create(window_bounds);
-  layer_set_update_proc(s_circle_canvas_layer, update_circle_proc);
-  layer_add_child(window_layer, s_circle_canvas_layer);
+  s_spin_circle_center = GPoint(s_center.x, s_center.y + 10);
   
-   // --- Triangle / Arrow Layer ---
-  s_arrow_path = gpath_create(&ARROW_PATH_INFO);
-  s_triangle_path = gpath_create(&BOLT_PATH_INFO);
-  gpath_move_to(s_triangle_path, s_circle_center);
-  s_triangle_canvas_layer = layer_create(window_bounds);
-  layer_set_update_proc(s_triangle_canvas_layer, update_triangle_proc);
-  layer_add_child(window_layer, s_triangle_canvas_layer);
+  // Rects
+  s_welcome_rect = GRect(112, s_center.y, 10, 10);
   
-  // Create heading TextLayer
-  s_heading_text_layer = text_layer_create(GRect(0, 5, 144, 50));
-  text_layer_set_text(s_heading_text_layer, "To turn off alarm");
-  text_layer_set_background_color(s_heading_text_layer, GColorClear);
-  text_layer_set_text_color(s_heading_text_layer, GColorWhite);
-  text_layer_set_font(s_heading_text_layer, fonts_get_system_font(FONT_KEY_GOTHIC_14));
-  text_layer_set_text_alignment(s_heading_text_layer, GTextAlignmentCenter);
-  layer_add_child(window_layer, text_layer_get_layer(s_heading_text_layer));
+  // Welcome arrow
+  s_welcome_arrow_path = gpath_create(&SPIN_ARROW_PATH_INFO);
+  gpath_move_to(s_welcome_arrow_path, GPoint(120, s_center.y + 15));
+  s_welcome_canvas_layer = layer_create(window_bounds);
+  layer_set_update_proc(s_welcome_canvas_layer, update_welcome_proc);
+  layer_add_child(window_layer, s_welcome_canvas_layer);
   
-  // Create top text TextLayer
-  s_top_text_layer = text_layer_create(GRect(0, s_circle_center.y - 30, 144, 50));
-  text_layer_set_text(s_top_text_layer, "Spin Around");
-  text_layer_set_background_color(s_top_text_layer, GColorClear);
-  text_layer_set_text_color(s_top_text_layer, GColorWhite);
-  text_layer_set_font(s_top_text_layer, fonts_get_system_font(FONT_KEY_GOTHIC_14));
-  text_layer_set_text_alignment(s_top_text_layer, GTextAlignmentCenter);
-  layer_add_child(window_layer, text_layer_get_layer(s_top_text_layer));
+  // Welcome text layer
+  s_welcome_text_layer = text_layer_create(GRect(10, s_center.y - 12, 144, 50));
+  text_layer_set_text(s_welcome_text_layer, "Press and hold");
+  text_layer_set_background_color(s_welcome_text_layer, GColorClear);
+  text_layer_set_text_color(s_welcome_text_layer, GColorWhite);
+  text_layer_set_font(s_welcome_text_layer, fonts_get_system_font(FONT_KEY_GOTHIC_24));
+  layer_add_child(window_layer, text_layer_get_layer(s_welcome_text_layer));
   
-  // Create spin text TextLayer
-  s_spins_text_layer = text_layer_create(GRect(0, s_circle_center.y - 14, 144, 50));
-  text_layer_set_text(s_spins_text_layer, "2");
-  text_layer_set_background_color(s_spins_text_layer, GColorClear);
-  text_layer_set_text_color(s_spins_text_layer, GColorWhite);
-  text_layer_set_font(s_spins_text_layer, fonts_get_system_font(FONT_KEY_GOTHIC_28));
-  text_layer_set_text_alignment(s_spins_text_layer, GTextAlignmentCenter);
-  layer_add_child(window_layer, text_layer_get_layer(s_spins_text_layer));
+  // Spin circle Layer
+  s_spin_circle_canvas_layer = layer_create(window_bounds);
+  layer_set_update_proc(s_spin_circle_canvas_layer, update_spin_circle_proc);
+  layer_add_child(window_layer, s_spin_circle_canvas_layer);
   
-  // Create bottom text TextLayer
-  s_bottom_text_layer = text_layer_create(GRect(0, s_circle_center.y + 34 - 14, 144, 50));
-  text_layer_set_text(s_bottom_text_layer, "Times!");
-  text_layer_set_background_color(s_bottom_text_layer, GColorClear);
-  text_layer_set_text_color(s_bottom_text_layer, GColorWhite);
-  text_layer_set_font(s_bottom_text_layer, fonts_get_system_font(FONT_KEY_GOTHIC_14));
-  text_layer_set_text_alignment(s_bottom_text_layer, GTextAlignmentCenter);
-  layer_add_child(window_layer, text_layer_get_layer(s_bottom_text_layer));
+   // Spin triangle / arrow Layer
+  s_spin_arrow_path = gpath_create(&SPIN_ARROW_PATH_INFO);
+  s_spin_triangle_path = gpath_create(&BOLT_PATH_INFO);
+  gpath_move_to(s_spin_triangle_path, s_spin_circle_center);
+  s_spin_triangle_canvas_layer = layer_create(window_bounds);
+  layer_set_update_proc(s_spin_triangle_canvas_layer, update_triangle_proc);
+  layer_add_child(window_layer, s_spin_triangle_canvas_layer);
   
-  // Create time TextLayer
-  s_time_layer = text_layer_create(GRect(0, 65, 144, 50));
-  text_layer_set_background_color(s_time_layer, GColorClear);
-  text_layer_set_text_color(s_time_layer, GColorWhite);
-  text_layer_set_font(s_time_layer, fonts_get_system_font(FONT_KEY_GOTHIC_28));
-  text_layer_set_text_alignment(s_time_layer, GTextAlignmentCenter);
-//   layer_add_child(window_layer, text_layer_get_layer(s_time_layer));
+  // Spin heading TextLayer
+  s_spin_heading_text_layer = text_layer_create(GRect(0, 5, 144, 50));
+  text_layer_set_text(s_spin_heading_text_layer, "To turn off alarm");
+  text_layer_set_background_color(s_spin_heading_text_layer, GColorClear);
+  text_layer_set_text_color(s_spin_heading_text_layer, GColorWhite);
+  text_layer_set_font(s_spin_heading_text_layer, fonts_get_system_font(FONT_KEY_GOTHIC_14));
+  text_layer_set_text_alignment(s_spin_heading_text_layer, GTextAlignmentCenter);
+  layer_add_child(window_layer, text_layer_get_layer(s_spin_heading_text_layer));
   
-  // Status heading TextLayer
-  s_status_layer = text_layer_create(GRect(0, 100, 144, 30));
-  text_layer_set_font(s_status_layer, fonts_get_system_font(FONT_KEY_GOTHIC_14));
-  text_layer_set_text(s_status_layer, "No data yet.");
-  text_layer_set_background_color(s_status_layer, GColorClear);
-  text_layer_set_overflow_mode(s_status_layer, GTextOverflowModeWordWrap);
-  text_layer_set_text_alignment(s_status_layer, GTextAlignmentCenter);
-  text_layer_set_text_color(s_status_layer, GColorWhite);
-  if(TESTING) layer_add_child(window_layer, text_layer_get_layer(s_status_layer));
+  // Spin top text TextLayer
+  s_spin_top_text_layer = text_layer_create(GRect(0, s_spin_circle_center.y - 30, 144, 50));
+  text_layer_set_text(s_spin_top_text_layer, "Spin Around");
+  text_layer_set_background_color(s_spin_top_text_layer, GColorClear);
+  text_layer_set_text_color(s_spin_top_text_layer, GColorWhite);
+  text_layer_set_font(s_spin_top_text_layer, fonts_get_system_font(FONT_KEY_GOTHIC_14));
+  text_layer_set_text_alignment(s_spin_top_text_layer, GTextAlignmentCenter);
+  layer_add_child(window_layer, text_layer_get_layer(s_spin_top_text_layer));
+  
+  // Spin spins TextLayer
+  s_spin_spins_text_layer = text_layer_create(GRect(0, s_spin_circle_center.y - 14, 144, 50));
+  text_layer_set_text(s_spin_spins_text_layer, "2");
+  text_layer_set_background_color(s_spin_spins_text_layer, GColorClear);
+  text_layer_set_text_color(s_spin_spins_text_layer, GColorWhite);
+  text_layer_set_font(s_spin_spins_text_layer, fonts_get_system_font(FONT_KEY_GOTHIC_28));
+  text_layer_set_text_alignment(s_spin_spins_text_layer, GTextAlignmentCenter);
+  layer_add_child(window_layer, text_layer_get_layer(s_spin_spins_text_layer));
+  
+  // Spin bottom text TextLayer
+  s_spin_bottom_text_layer = text_layer_create(GRect(0, s_spin_circle_center.y + 34 - 14, 144, 50));
+  text_layer_set_text(s_spin_bottom_text_layer, "Times!");
+  text_layer_set_background_color(s_spin_bottom_text_layer, GColorClear);
+  text_layer_set_text_color(s_spin_bottom_text_layer, GColorWhite);
+  text_layer_set_font(s_spin_bottom_text_layer, fonts_get_system_font(FONT_KEY_GOTHIC_14));
+  text_layer_set_text_alignment(s_spin_bottom_text_layer, GTextAlignmentCenter);
+  layer_add_child(window_layer, text_layer_get_layer(s_spin_bottom_text_layer));
+  
+  // Spin time TextLayer
+  s_spin_time_layer = text_layer_create(GRect(0, s_spin_circle_center.y + 38, 144, 50));
+  text_layer_set_background_color(s_spin_time_layer, GColorClear);
+  text_layer_set_text_color(s_spin_time_layer, GColorWhite);
+  text_layer_set_font(s_spin_time_layer, fonts_get_system_font(FONT_KEY_GOTHIC_14_BOLD));
+  text_layer_set_text_alignment(s_spin_time_layer, GTextAlignmentCenter);
+//   layer_add_child(window_layer, text_layer_get_layer(s_spin_time_layer));
+  
+  // TODO: remove this
+  set_alarm_on(true);
 }
 
 static void main_window_unload(Window *window) {
     // Destroy TextLayer
-    text_layer_destroy(s_time_layer);
-    text_layer_destroy(s_status_layer);
+    text_layer_destroy(s_spin_time_layer);
     
     // Unsubscribe to acc. data service
     accel_data_service_unsubscribe();
@@ -269,11 +333,11 @@ static void tick_handler(struct tm *tick_time, TimeUnits units_changed) {
 // ----------------- CLICKS -----------------
 
 static void spin_click_handler(ClickRecognizerRef recognizer, void *context) {
-  spinning = true;
+  set_spinning(true);
 }
 
 static void spin_release_handler(ClickRecognizerRef recognizer, void *context) {
-  spinning = false;
+  set_spinning(false);
 }
 
 void start_spin_click_config_provider(Window *window) {
