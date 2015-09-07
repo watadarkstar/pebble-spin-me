@@ -1,4 +1,6 @@
 #include <pebble.h>
+#include "main.h"
+#include "settings.h"
 
 #define TESTING false
 
@@ -230,7 +232,35 @@ static void update_time() {
   text_layer_set_text(s_spin_time_layer, buffer);
 }
 
+static void tick_handler(struct tm *tick_time, TimeUnits units_changed) {
+  update_time();
+}
+
+// ----------------- CLICKS -----------------
+
+static void spin_click_handler(ClickRecognizerRef recognizer, void *context) {
+  set_spinning(true);
+}
+
+static void spin_release_handler(ClickRecognizerRef recognizer, void *context) {
+  set_spinning(false);
+}
+
+void start_spin_click_config_provider(Window *window) {
+  // Register the ClickHandlers
+  window_long_click_subscribe(BUTTON_ID_UP, 100, spin_click_handler, spin_release_handler);
+  window_long_click_subscribe(BUTTON_ID_SELECT, 100, spin_click_handler, spin_release_handler);
+  window_long_click_subscribe(BUTTON_ID_DOWN, 100, spin_click_handler, spin_release_handler);
+//   window_single_click_subscribe(BUTTON_ID_BACK, spin_click_handler);
+}
+
+// -------------- CLICKS END ---------------
+
+
 static void main_window_load(Window *window) {
+  // Set click config handler
+  window_set_click_config_provider(s_spin_window, (ClickConfigProvider) start_spin_click_config_provider);
+  
   // Window layer properties
   Layer *window_layer = window_get_root_layer(window);
   GRect window_bounds = layer_get_bounds(window_layer);
@@ -314,6 +344,16 @@ static void main_window_load(Window *window) {
   text_layer_set_text_alignment(s_spin_time_layer, GTextAlignmentCenter);
 //   layer_add_child(window_layer, text_layer_get_layer(s_spin_time_layer));
   
+  // Register with TickTimerService
+  tick_timer_service_subscribe(MINUTE_UNIT, tick_handler);
+  
+  // Subscribe to the compass data service when angle changes by 5 degrees
+  compass_service_subscribe(compass_handler);
+  compass_service_set_heading_filter(5);
+  
+  // Make sure the time is displayed from the start
+  update_time();
+  
   // TODO: remove this
   set_alarm_on(true);
 }
@@ -326,34 +366,12 @@ static void main_window_unload(Window *window) {
     accel_data_service_unsubscribe();
 }
 
-static void tick_handler(struct tm *tick_time, TimeUnits units_changed) {
-  update_time();
+void spin_window_show(){
+  // Show the Window on the watch, with animated=true
+  window_stack_push(s_spin_window, true);
 }
-
-// ----------------- CLICKS -----------------
-
-static void spin_click_handler(ClickRecognizerRef recognizer, void *context) {
-  set_spinning(true);
-}
-
-static void spin_release_handler(ClickRecognizerRef recognizer, void *context) {
-  set_spinning(false);
-}
-
-void start_spin_click_config_provider(Window *window) {
-  // Register the ClickHandlers
-  window_long_click_subscribe(BUTTON_ID_UP, 100, spin_click_handler, spin_release_handler);
-  window_long_click_subscribe(BUTTON_ID_SELECT, 100, spin_click_handler, spin_release_handler);
-  window_long_click_subscribe(BUTTON_ID_DOWN, 100, spin_click_handler, spin_release_handler);
-//   window_single_click_subscribe(BUTTON_ID_BACK, spin_click_handler);
-}
-
-// -------------- CLICKS END ---------------
 
 static void init() {
-  // Register with TickTimerService
-  tick_timer_service_subscribe(MINUTE_UNIT, tick_handler);
-  
   // Create spin Window element and assign to pointer
   s_spin_window = window_create();
   window_set_background_color(s_spin_window, GColorBlack);
@@ -367,28 +385,22 @@ static void init() {
     .load = main_window_load,
     .unload = main_window_unload
   });
-
-  // Show the Window on the watch, with animated=true
-  window_stack_push(s_spin_window, true);
   
-  // Set click config handler
-  window_set_click_config_provider(s_spin_window, (ClickConfigProvider) start_spin_click_config_provider);
+  // Init the settings window
+  settings_window_init();
   
-  // Subscribe to the compass data service when angle changes by 5 degrees
-  compass_service_subscribe(compass_handler);
-  compass_service_set_heading_filter(5);
-  
-  // Make sure the time is displayed from the start
-  update_time();
+  // Show the settings window
+  settings_window_show();
+//   spin_window_show();
 }
 
 static void deinit() {
   // Destroy Window
-  window_destroy(s_spin_window);
+//   window_destroy(s_spin_window);
 }
 
 int main(void) {
   init();
   app_event_loop();
-  deinit();
+//   deinit();
 }
