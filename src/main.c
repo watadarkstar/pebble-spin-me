@@ -1,6 +1,7 @@
 #include <pebble.h>
 #include "main.h"
 #include "settings.h"
+#include "edit.h"
 
 #define TESTING false
 
@@ -39,10 +40,10 @@ static const GPathInfo SPIN_ARROW_PATH_INFO = {
 // Spin welcome paths
 static GPath *s_welcome_arrow_path;
 static GRect s_welcome_rect;
-static const GPathInfo WELCOME_ARROW_PATH_INFO = {
-  .num_points = 3,
-  .points = (GPoint []) {{0, 0}, {0, -20}, {20, -10}}
-};
+// static const GPathInfo WELCOME_ARROW_PATH_INFO = {
+//   .num_points = 3,
+//   .points = (GPoint []) {{0, 0}, {0, -20}, {20, -10}}
+// };
 
 // Spin state stuff
 static int32_t angle = -1;
@@ -389,6 +390,9 @@ static void init() {
   // Init the settings window
   settings_window_init();
   
+  // Init the edit window
+  win_edit_init();
+  
   // Show the settings window
   settings_window_show();
 //   spin_window_show();
@@ -396,11 +400,11 @@ static void init() {
 
 static void deinit() {
   // Destroy Window
-//   window_destroy(s_spin_window);
+  window_destroy(s_spin_window);
 }
 
 int main(void) {
   init();
   app_event_loop();
-//   deinit();
+  deinit();
 }
