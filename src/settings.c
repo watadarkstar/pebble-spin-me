@@ -1,13 +1,14 @@
+#include <pebble.h>
 #include "settings.h"
 #include "main.h"
 #include "edit.h"
-#include <pebble.h>
+#include "storage.h"
   
 #define SETTINGS_IS_ENABLED_KEY 5
 
 static Window *s_settings_window;
 static MenuLayer *s_settings_menu_layer;
-struct Alarm alarm;
+static struct Alarm *s_alarm;
   
 enum MENU_ITEM
 {
@@ -27,19 +28,16 @@ static uint16_t settings_num_sections(struct MenuLayer* menu, void* callback_con
 }
 
 static void settings_select(struct MenuLayer *s_menu_layer, MenuIndex *cell_index, void *callback_context) {
-  bool is_enabled;
-  
   switch (cell_index->row) {
     case MENU_ENABLE_DISABLE:
-      is_enabled = persist_exists(SETTINGS_IS_ENABLED_KEY) ? persist_read_bool(SETTINGS_IS_ENABLED_KEY) : false;
-      persist_write_bool(SETTINGS_IS_ENABLED_KEY, !is_enabled);
+      s_alarm->enabled = !s_alarm->enabled;
       layer_mark_dirty((Layer *)s_settings_menu_layer);
       break;
     case MENU_TUTORIAL:
       spin_window_show();
       break;
     case MENU_EDIT:
-      win_edit_show(&alarm);
+      win_edit_show(s_alarm);
       break;
   }
 }
@@ -63,7 +61,7 @@ static void settings_draw_row(GContext *ctx, const Layer *cell_layer, MenuIndex 
         break;
       case MENU_ENABLE_DISABLE:
         snprintf(s_buffer, sizeof(s_buffer), "Enable");
-        if (persist_read_bool(SETTINGS_IS_ENABLED_KEY)){
+        if (s_alarm->enabled){
           snprintf(s_buffer, sizeof(s_buffer), "Disable"); 
         }
         break;
@@ -81,11 +79,15 @@ static void settings_draw_row(GContext *ctx, const Layer *cell_layer, MenuIndex 
 }
 
 static void settings_draw_header(GContext* ctx, const Layer* cell_layer, uint16_t section_index, void* callback_context) {
+  static char s_buffer[32];
+  
   graphics_context_set_text_color(ctx, GColorBlack);
   graphics_context_set_fill_color(ctx, GColorWhite);
   graphics_fill_rect(ctx,GRect(0,1,144,14),0,GCornerNone);
   
-  graphics_draw_text(ctx, "test",
+  snprintf(s_buffer, sizeof(s_buffer), "%d:%d", s_alarm->hour, s_alarm->minute); 
+  
+  graphics_draw_text(ctx, s_buffer,
                      fonts_get_system_font(FONT_KEY_GOTHIC_14_BOLD),
                      GRect(3, -2, 144 - 33, 14), GTextOverflowModeWordWrap,
                      GTextAlignmentLeft, NULL);
@@ -120,7 +122,9 @@ static void settings_window_load(Window *window){
 static void settings_window_unload(Window *window){
 }
   
-void settings_window_init(){
+void settings_window_init(struct Alarm *alarm){
+  s_alarm = alarm;
+  
   // Create settings Window element and assign to pointer
   s_settings_window = window_create();
   

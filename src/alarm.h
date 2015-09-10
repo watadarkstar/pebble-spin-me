@@ -2,6 +2,8 @@
   
 #include <pebble.h>
   
+#define NUM_ALARMS 1
+  
 typedef struct Alarm{
   unsigned char hour;
   unsigned char minute;

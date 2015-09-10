@@ -2,9 +2,13 @@
 #include "main.h"
 #include "settings.h"
 #include "edit.h"
+#include "storage.h"
+#include "alarm.h"
 
 #define TESTING false
 
+struct Alarm alarm;
+  
 // Spin constants
 static const int16_t RADIUS = 58;
 static const int16_t BORDER = 8;
@@ -373,6 +377,8 @@ void spin_window_show(){
 }
 
 static void init() {
+  load_persistent_storage_alarm(&alarm);
+  
   // Create spin Window element and assign to pointer
   s_spin_window = window_create();
   window_set_background_color(s_spin_window, GColorBlack);
@@ -388,7 +394,7 @@ static void init() {
   });
   
   // Init the settings window
-  settings_window_init();
+  settings_window_init(&alarm);
   
   // Init the edit window
   win_edit_init();
@@ -401,6 +407,7 @@ static void init() {
 static void deinit() {
   // Destroy Window
   window_destroy(s_spin_window);
+  write_persistent_storage_alarm(&alarm);
 }
 
 int main(void) {
