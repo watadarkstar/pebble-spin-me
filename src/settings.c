@@ -1,6 +1,6 @@
 #include <pebble.h>
 #include "settings.h"
-#include "main.h"
+#include "wakeup.h"
 #include "edit.h"
 #include "storage.h"
   
