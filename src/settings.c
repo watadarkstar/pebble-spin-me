@@ -80,12 +80,22 @@ static void settings_draw_row(GContext *ctx, const Layer *cell_layer, MenuIndex 
 
 static void settings_draw_header(GContext* ctx, const Layer* cell_layer, uint16_t section_index, void* callback_context) {
   static char s_buffer[32];
+  int hour;
+  bool is_am;
   
   graphics_context_set_text_color(ctx, GColorBlack);
   graphics_context_set_fill_color(ctx, GColorWhite);
   graphics_fill_rect(ctx,GRect(0,1,144,14),0,GCornerNone);
   
-  snprintf(s_buffer, sizeof(s_buffer), "%d:%d", s_alarm->hour, s_alarm->minute); 
+  if(s_alarm->alarm_id == -1) {
+    snprintf(s_buffer, sizeof(s_buffer), "No Alarm Set");     
+  } else if(clock_is_24h_style()){
+    snprintf(s_buffer, sizeof(s_buffer), "Alarm: %d:%02d", s_alarm->hour, s_alarm->minute); 
+  } else {
+    convert_24_to_12(s_alarm->hour, &hour, &is_am);
+    snprintf(s_buffer, sizeof(s_buffer), "Alarm: %d:%02d %s", hour, s_alarm->minute, is_am ? "AM" : "PM"); 
+
+  }
   
   graphics_draw_text(ctx, s_buffer,
                      fonts_get_system_font(FONT_KEY_GOTHIC_14_BOLD),
