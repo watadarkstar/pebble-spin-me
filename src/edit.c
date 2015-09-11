@@ -126,7 +126,17 @@ static void select_click_handler(ClickRecognizerRef recognizer, void *context) {
     temp_alarm.hour = s_digits[0];
     temp_alarm.minute = s_digits[1];
     s_is_am = s_digits[2];
-    memcpy(current_alarm,&temp_alarm,sizeof(Alarm));
+    if(!clock_is_24h_style()){
+      if(s_is_am) {
+        int hour = temp_alarm.hour;
+        hour -= 12;
+        if(hour<0) hour+=12;
+        temp_alarm.hour = hour;
+      } else {
+        temp_alarm.hour = ((temp_alarm.hour+12)%12) + 12;
+      }
+    } 
+    memcpy(current_alarm,&temp_alarm,sizeof(Alarm));      
     window_stack_pop(true);
     s_selection--;
   }

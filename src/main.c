@@ -72,6 +72,7 @@ static void set_spinning(bool spinning){
   if(!spinning) {
     layer_mark_dirty(s_spin_triangle_canvas_layer);
     layer_mark_dirty(s_spin_circle_canvas_layer);
+    angle = -1;
   }
 }
 
