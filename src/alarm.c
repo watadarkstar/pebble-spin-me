@@ -1,5 +1,9 @@
 #include "alarm.h"
 
+#define SECOND 60
+#define MINUTE 60
+#define HOUR 24
+  
 time_t clock_to_timestamp_precise(WeekDay day, int hour, int minute)
 {
   return (clock_to_timestamp(day, hour, minute)/60)*60;
@@ -19,7 +23,12 @@ time_t alarm_get_time_of_wakeup(Alarm *alarm)
   if(alarm->enabled)
   {
     // Calculate time to wake up
+    time_t now = time(NULL);
     time_t timestamp = clock_to_timestamp_precise(TODAY,alarm->hour,alarm->minute);
+    
+    if((now-timestamp)<=0) {
+      timestamp = (time_t)(HOUR*MINUTE*SECOND) + clock_to_timestamp_precise(TODAY,alarm->hour,alarm->minute);
+    }
     return timestamp;
   }
   return -1;

@@ -10,7 +10,12 @@ static Alarm *s_alarm;
 static bool *s_snooze;
 
 // vibrate for 1 min.
-static const uint32_t segments[] = { 10000, 1, 10000, 1, 10000, 1, 10000, 1, 10000, 1, 10000 };
+static const uint32_t segments[] = { 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000,
+                                     1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000,
+                                     1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000,
+                                     1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000,
+                                     1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000,
+                                     1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000 };
 
 VibePattern vibe_pat = {
   .durations = segments,
@@ -192,12 +197,6 @@ static void update_triangle_proc(Layer *layer, GContext *ctx) {
   gpath_draw_filled(ctx, s_spin_triangle_path);
   graphics_context_set_fill_color(ctx, GColorWhite);
   gpath_draw_filled(ctx, s_spin_arrow_path);
-  
-  if(TESTING){
-    // Stroke the path:
-//     graphics_context_set_stroke_color(ctx, GColorWhite);
-//     gpath_draw_outline(ctx, s_triangle_path);
-  }
 }
 
 static void update_welcome_proc(Layer *layer, GContext *ctx){
